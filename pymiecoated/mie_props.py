@@ -48,7 +48,7 @@ def mie_props(coeffs,y):
     qabs = qext-qsca
 
     fn = (coeffs.an-coeffs.bn)*cn
-    gn=(-1)**n
+    gn=(-1)**n # this line takes third of the whole function exec time
     q = (fn*gn).sum()
     qb = dot(q,q.conj()).real/y2
 
@@ -89,9 +89,15 @@ def mie_pt(u,nmax):
     t[1] = 6*u**2 - 3
 
     nn = arange(2,nmax,dtype=float)
+    
+    pp1 = (2 * nn + 1) / nn * u
+    pp2 = (nn + 1) / nn
+    # extremely slow loop - about 90% of the whole exec time when calculating s12
     for n in nn:
         n_i = int(n)
-        p[n_i] = (2*n+1)/n*p[n_i-1]*u - (n+1)/n*p[n_i-2]
+        # marginal improvement - the loop is still very slow
+        # this function should probably be wrapped in numba.jit
+        p[n_i] = p[n_i-1] * pp1[n_i - 2] - p[n_i-2] * pp2[n_i - 2]
 
     t[2:] = (nn+1)*u*p[2:] - (nn+2)*p[1:-1]
 
