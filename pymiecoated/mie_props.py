@@ -21,6 +21,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 from numpy import array, arange, dot, zeros, vstack, sqrt, sin, cos
 import numba
+import numpy as np
 
 
 def mie_props(coeffs,y):
@@ -76,10 +77,8 @@ def numba_dot(a, b):
   return ret
 
 def mie_S12(coeffs,u):
-  nmax = coeffs.nmax
-  an = coeffs.an
-  bn = coeffs.bn
-  return mie_S12_backend(nmax, an, bn, u)
+  s1, s2 = mie_S12_backend(coeffs.nmax, coeffs.an, coeffs.bn, u)
+  return (np.complex128(s1), np.complex128(s2)) #required to comply with the self-test 
 
 
 @numba.jit(nopython=True)
@@ -87,7 +86,7 @@ def mie_S12_backend(nmax,an,bn,u):
     """The amplitude scattering matrix.
     """
     pin = mie_p(u, nmax)
-    tin = mie_p(u, nmax)
+    tin = mie_t(u, nmax, pin)
     n = [float(i) for i in range(1, nmax+1)]
     n2 = [(2 * ni + 1) / (ni * (ni + 1)) for ni in n]
 
