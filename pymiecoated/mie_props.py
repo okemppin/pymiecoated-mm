@@ -77,16 +77,32 @@ def numba_dot(a, b):
   return ret
 
 def mie_S12(coeffs,u):
-  s1, s2 = mie_S12_backend(coeffs.nmax, coeffs.an, coeffs.bn, u)
-  return (np.complex128(s1), np.complex128(s2)) #required to comply with the self-test 
+  #return mie_S12old(coeffs,u) # use this to fall back to non-numba version
+  return mie_S12_backend(coeffs.nmax, coeffs.an, coeffs.bn, u)
 
+  # use these for self-tests
+  #s1, s2 = mie_S12_backend(coeffs.nmax, coeffs.an, coeffs.bn, u)
+  #return (np.complex128(s1), np.complex128(s2)) #required to comply with the self-test 
+
+def mie_S12_pt(coeffs,pin, tin):
+  return mie_S12_backend_pt(coeffs.nmax, coeffs.an, coeffs.bn, pin, tin)
 
 @numba.jit(nopython=True)
 def mie_S12_backend(nmax,an,bn,u):
-    """The amplitude scattering matrix.
+    """
+    Do note that pin and tin do not depend on the refractive index, and thus
+    can be shared between runs of different mr, mi
     """
     pin = mie_p(u, nmax)
     tin = mie_t(u, nmax, pin)
+    return mie_S12_backend_pt(nmax,an,bn,pin,tin)
+
+@numba.jit(nopython=True)
+def mie_S12_backend_pt(nmax,an,bn,pin, tin):
+    """The amplitude scattering matrix.
+    """
+
+
     n = [float(i) for i in range(1, nmax+1)]
     n2 = [(2 * ni + 1) / (ni * (ni + 1)) for ni in n]
 
@@ -102,7 +118,7 @@ def mie_S12_backend(nmax,an,bn,u):
 def mie_S12old(coeffs,u):
     """The amplitude scattering matrix.
     """
-    (pin,tin) = mie_pt(u,coeffs.nmax)
+    (pin,tin) = mie_ptold(u,coeffs.nmax)
     n = arange(1, coeffs.nmax+1, dtype=float)
     n2 = (2*n+1)/(n*(n+1))
     pin *= n2
@@ -132,7 +148,7 @@ def mie_p(u, nmax):
 """
 Numba version is faster than numpy version
 """
-@numba.jit(nopython=True)
+@numba.jit(nopython=True,fastmath=False)
 def mie_t(u, nmax, p):
     #nn = arange(2,nmax,dtype=float)
     nn = [float(i) for i in range(2,nmax)]
@@ -161,14 +177,9 @@ def mie_ptold(u,nmax):
 
     nn = arange(2,nmax,dtype=float)
 
-    pp1 = (2 * nn + 1) / nn * u
-    pp2 = (nn + 1) / nn
-    
     for n in nn:
         n_i = int(n)
-        # marginal improvement - the loop is still very slow
-        # this function should probably be wrapped in numba.jit
-        p[n_i] = p[n_i-1] * pp1[n_i - 2] - p[n_i-2] * pp2[n_i - 2]
+        p[n_i] = (2*n+1)/n*p[n_i-1]*u - (n+1)/n*p[n_i-2]
     
     t[2:] = (nn+1)*u*p[2:] - (nn+2)*p[1:-1]
 

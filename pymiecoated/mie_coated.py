@@ -22,7 +22,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 from numpy import sqrt
 from .mie_coeffs import MieCoeffs
 from .mie_aux import Cache
-from .mie_props import mie_props, mie_S12
+from .mie_props import mie_props, mie_S12, mie_S12_pt   
 
 
 class MieScatterProps(object):
@@ -48,6 +48,10 @@ class MieScatterProps(object):
     def S12(self, u):
         self._S12 = mie_S12(self._coeffs, u)
         return self._S12
+
+    def S12_pt(self, pin, tin):
+        self._S12_pt = mie_S12_pt(self._coeffs, pin, tin)
+        return self._S12_pt
 
 
 class Mie(object):
@@ -161,6 +165,9 @@ class Mie(object):
         """
         return self._get_S12(u)
 
+    def S12_pt(self, pin, tin):
+        return self._get_S12_pt(pin, tin)
+
 
     def _get_scatt_prop(self, prop):
         sig = self._params_signature()
@@ -175,6 +182,12 @@ class Mie(object):
         if sig not in self._cache:
             self._cache[sig] = MieScatterProps(sig)
         return self._cache[sig].S12(u)
+
+    def _get_S12_pt(self, pin, tin):
+        sig = self._params_signature()
+        if sig not in self._cache:
+            self._cache[sig] = MieScatterProps(sig)
+        return self._cache[sig].S12_pt(pin, tin)
 
 
     def _get_m(self):
