@@ -19,7 +19,8 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-from numpy import arange, dot, zeros, vstack, sqrt, sin, cos
+from numpy import array, arange, dot, zeros, vstack, sqrt, sin, cos
+import numba
 
 
 def mie_props(coeffs,y):
@@ -64,8 +65,42 @@ def mie_props(coeffs,y):
     return {"qext":qext, "qsca":qsca, "qabs":qabs, "qb":qb, "asy":asy, 
         "qratio":qratio}
 
+#@numba.jit("complex64(complex128[:], float64[:])", nopython=True)
+
+# issues with signature, so we just use automatic signature
+@numba.jit(nopython=True)
+def numba_dot(a, b):
+  ret = 0 + 0j
+  for i in range(len(a)):
+    ret += a[i] * b[i]
+  return ret
 
 def mie_S12(coeffs,u):
+  nmax = coeffs.nmax
+  an = coeffs.an
+  bn = coeffs.bn
+  return mie_S12_backend(nmax, an, bn, u)
+
+
+@numba.jit(nopython=True)
+def mie_S12_backend(nmax,an,bn,u):
+    """The amplitude scattering matrix.
+    """
+    pin = mie_p(u, nmax)
+    tin = mie_p(u, nmax)
+    n = [float(i) for i in range(1, nmax+1)]
+    n2 = [(2 * ni + 1) / (ni * (ni + 1)) for ni in n]
+
+    
+    for i in range(nmax):
+      pin[i] = pin[i] * n2[i]
+      tin[i] = tin[i] * n2[i]
+
+    s1 = numba_dot(an,pin)+numba_dot(bn,tin)
+    s2 = numba_dot(an,tin)+numba_dot(bn,pin)
+    return (s1, s2)
+
+def mie_S12old(coeffs,u):
     """The amplitude scattering matrix.
     """
     (pin,tin) = mie_pt(u,coeffs.nmax)
@@ -74,12 +109,49 @@ def mie_S12(coeffs,u):
     pin *= n2
     tin *= n2
 
-    S1 = dot(coeffs.an,pin)+dot(coeffs.bn,tin)
-    S2 = dot(coeffs.an,tin)+dot(coeffs.bn,pin)
-    return (S1, S2)
+    s1 = dot(coeffs.an,pin)+dot(coeffs.bn,tin)
+    s2 = dot(coeffs.an,tin)+dot(coeffs.bn,pin)
+    return (s1, s2)
+
+#@numba.jit("float64[:](float64, int64)", nopython=True)
+@numba.jit(nopython=True)
+def mie_p(u, nmax):
+    #p = zeros(nmax, dtype=float)
+    p = [0. for i in range(nmax)]
+    p[0] = 1
+    p[1] = 3*u
+    #nn = arange(2,nmax,dtype=float)
+    nn = [float(i) for i in range(2,nmax)]
+
+    for n in nn:
+        n_i = int(n)
+        p[n_i] = (2*n+1)/n*p[n_i-1]*u - (n+1)/n*p[n_i-2]
+
+    return p
 
 
-def mie_pt(u,nmax):
+"""
+Numba version is faster than numpy version
+"""
+@numba.jit(nopython=True)
+def mie_t(u, nmax, p):
+    #nn = arange(2,nmax,dtype=float)
+    nn = [float(i) for i in range(2,nmax)]
+    t = [0. for i in range(nmax)]
+    #t = zeros(nmax, dtype=float)
+    t[0] = u
+    t[1] = 6*u**2 - 3
+    for n in nn:
+        n_i = int(n)
+        t[n_i] = (n+1) * u * p[n_i] - (n+2) * p[n_i-1]
+    #t[2:] = (nn+1)*u*p[2:] - (nn+2)*p[1:-1]
+    return t
+
+
+def mie_pt(u, nmax):
+  return mie_ptnumba(u, nmax)
+
+def mie_ptold(u,nmax):
     u = float(u)
     p = zeros(nmax, dtype=float)
     p[0] = 1
@@ -89,16 +161,26 @@ def mie_pt(u,nmax):
     t[1] = 6*u**2 - 3
 
     nn = arange(2,nmax,dtype=float)
-    
+
     pp1 = (2 * nn + 1) / nn * u
     pp2 = (nn + 1) / nn
-    # extremely slow loop - about 90% of the whole exec time when calculating s12
+    
     for n in nn:
         n_i = int(n)
         # marginal improvement - the loop is still very slow
         # this function should probably be wrapped in numba.jit
         p[n_i] = p[n_i-1] * pp1[n_i - 2] - p[n_i-2] * pp2[n_i - 2]
-
+    
     t[2:] = (nn+1)*u*p[2:] - (nn+2)*p[1:-1]
 
     return (p,t)
+
+def mie_ptnumba(u,nmax):
+    u = float(u)
+
+
+    p = mie_p(u, nmax)
+    t = mie_t(u, nmax, p)
+    
+
+    return (array(p),array(t))
