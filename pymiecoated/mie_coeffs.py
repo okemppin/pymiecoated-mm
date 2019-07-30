@@ -19,7 +19,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-from numpy import pi, arange, zeros, hstack, sqrt, sin, cos
+from numpy import pi, arange, zeros, hstack, sqrt, sin, cos, array
 from scipy.special import jv, yv
 
 
@@ -36,6 +36,8 @@ def mie_coeffs(params):
 
     eps = complex(params["eps"]) if params["eps"] is not None else None
     x = float(params["x"]) if params["x"] is not None else None
+    ajv = array(params["ajv"]) if params["ajv"] is not [] else []
+    ayv = array(params["ayv"]) if params["ayv"] is not [] else []
 
     if (x==None) or (eps==None):
         raise ValueError("Must specify x and either eps or m.")
@@ -59,9 +61,9 @@ def mie_coeffs(params):
 
     # Do not use the coated version if it is not necessary
     if x==y or eps==eps2:
-        coeffs = single_mie_coeff(eps,mu,y)
+        coeffs = single_mie_coeff(eps,mu,y,ajv,ayv)
     elif x==0:
-        coeffs = single_mie_coeff(eps2,mu,y)
+        coeffs = single_mie_coeff(eps2,mu,y,ajv,ayv)
     else:
         coeffs = coated_mie_coeff(eps,eps2,x,y)
 
@@ -73,7 +75,7 @@ def getjv(nu,x):
 def getyv(nu,x):
   return yv(nu,x)
 # with numba speeding up s12 calculations, this is the main bottleneck for large particles
-def single_mie_coeff(eps,mu,x):
+def single_mie_coeff(eps,mu,x,ajv, ayv):
     """Mie coefficients for the single-layered sphere.
 
     Args:
@@ -97,9 +99,16 @@ def single_mie_coeff(eps,mu,x):
 
     sx = sqrt(0.5*pi*x)
     # jv/yv consume the most time here (and thus the whole program) for large values of x
-    px = sx*getjv(nu,x)
+    #px = sx*getjv(nu,x)
+    if len(ajv) == 0:
+      ajv = getjv(nu,x)
+    px = sx*ajv # jv is a function of x only, since nmax is unique for each x
     p1x = hstack((sin(x), px[:nmax1]))
-    chx = -sx*getyv(nu,x)
+    #chx = -sx*getyv(nu,x)
+    if len(ayv) == 0:
+      ayv = getyv(nu,x)
+      
+    chx = -sx*ayv # jv is a function of x only, since nmax is unique for each x
     ch1x = hstack((cos(x), chx[:nmax1]))
     gsx = px-complex(0,1)*chx
     gs1x = p1x-complex(0,1)*ch1x

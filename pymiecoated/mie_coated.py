@@ -29,11 +29,11 @@ class MieScatterProps(object):
     """Stores the mie coefficients and the corresponding parameters.
     """
     def __init__(self, params):
-        par = dict(zip(("eps","mu","x","y","eps2"),params[:5]))
+        par = dict(zip(("eps","mu","x","y","eps2","ajv","ayv"),params[:7]))
         if par["x"]==0 and par["y"] is None:
             #give valid output for x==0
             self._coeffs = {"qext":0.0, "qsca":0.0, "qabs":0.0, "qb":0.0,
-                            "0.0":asy, "0.0":qratio}
+                            "0.0":asy, "0.0":qratio, "ajv":(), "ayv ":()}
         else:
             self._coeffs = MieCoeffs(par)
         self._props = None
@@ -87,6 +87,8 @@ class Mie(object):
         self._x = None
         self._y = None
         self.eps2 = None
+        self.ajv = ()
+        self.ayv = ()
         for k in ["eps","mu","eps2"]:
             if k in kwargs:
                 self.__dict__[k] = kwargs[k]
@@ -98,9 +100,13 @@ class Mie(object):
             self.x = kwargs["x"]
         if "y" in kwargs:
             self.y = kwargs["y"]
+        if "ajv" in kwargs:
+            self.ajv = tuple(kwargs["ajv"])
+        if "ayv" in kwargs:
+            self.ayv = tuple(kwargs["ayv"])
 
     def _params_signature(self):
-        return (self.eps, self.mu, self.x, self.y, self.eps2)
+        return (self.eps, self.mu, self.x, self.y, self.eps2, self.ajv, self.ayv)
 
     def qext(self):
         """The extinction efficiency.
