@@ -69,6 +69,7 @@ def mie_props(coeffs,y):
 #@numba.jit("complex64(complex128[:], float64[:])", nopython=True)
 
 # issues with signature, so we just use automatic signature
+# we use homemade dot so we can call it from within numba-wrapped function
 @numba.jit(nopython=True)
 def numba_dot(a, b):
   ret = 0 + 0j

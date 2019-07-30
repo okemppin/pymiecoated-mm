@@ -67,7 +67,12 @@ def mie_coeffs(params):
 
     return coeffs
 
-
+# trivial wrapper to help with profiling
+def getjv(nu,x):
+  return jv(nu,x)
+def getyv(nu,x):
+  return yv(nu,x)
+# with numba speeding up s12 calculations, this is the main bottleneck for large particles
 def single_mie_coeff(eps,mu,x):
     """Mie coefficients for the single-layered sphere.
 
@@ -83,6 +88,7 @@ def single_mie_coeff(eps,mu,x):
     z = sqrt(eps*mu)*x
     m = sqrt(eps/mu)
 
+
     nmax = int(round(2+x+4*x**(1.0/3.0)))
     nmax1 = nmax-1
     nmx = int(round(max(nmax,abs(z))+16))
@@ -90,9 +96,10 @@ def single_mie_coeff(eps,mu,x):
     nu = n+1.5
 
     sx = sqrt(0.5*pi*x)
-    px = sx*jv(nu,x)
+    # jv/yv consume the most time here (and thus the whole program) for large values of x
+    px = sx*getjv(nu,x)
     p1x = hstack((sin(x), px[:nmax1]))
-    chx = -sx*yv(nu,x)
+    chx = -sx*getyv(nu,x)
     ch1x = hstack((cos(x), chx[:nmax1]))
     gsx = px-complex(0,1)*chx
     gs1x = p1x-complex(0,1)*ch1x
