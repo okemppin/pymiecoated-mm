@@ -103,14 +103,6 @@ def mie_S12_backend_pt(nmax,an,bn,pin, tin):
     """
 
 
-    n = [float(i) for i in range(1, nmax+1)]
-    n2 = [(2 * ni + 1) / (ni * (ni + 1)) for ni in n]
-
-    
-    for i in range(nmax):
-      pin[i] = pin[i] * n2[i]
-      tin[i] = tin[i] * n2[i]
-
     s1 = numba_dot(an,pin)+numba_dot(bn,tin)
     s2 = numba_dot(an,tin)+numba_dot(bn,pin)
     return (s1, s2)
@@ -185,12 +177,18 @@ def mie_ptold(u,nmax):
 
     return (p,t)
 
+@numba.jit(nopython=True)
 def mie_ptnumba(u,nmax):
     u = float(u)
 
-
     p = mie_p(u, nmax)
     t = mie_t(u, nmax, p)
-    
+    n = [float(i) for i in range(1, nmax+1)]
+    n2 = [(2 * ni + 1) / (ni * (ni + 1)) for ni in n]
+    # faster to just store these n2-multiplied terms, since they only depend on nmax?
+    # it is massively faster for size 0.01 ... 1000 range (this function is about 10x faster, total about 33%)
+    for i in range(nmax):
+      p[i] = p[i] * n2[i]
+      t[i] = t[i] * n2[i]
 
     return (array(p),array(t))
