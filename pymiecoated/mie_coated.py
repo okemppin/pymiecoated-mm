@@ -28,17 +28,21 @@ from .mie_props import mie_props, mie_S12, mie_S12_pt
 class MieScatterProps(object):
     """Stores the mie coefficients and the corresponding parameters.
     """
-    def __init__(self, params):
-        par = dict(zip(("eps","mu","x","y","eps2","ajv","ayv"),params[:7]))
+    def __init__(self, params, ajv, ayv):
+        par = dict(zip(("eps","mu","x","y","eps2"),params[:5]))
         if par["x"]==0 and par["y"] is None:
             #give valid output for x==0
             self._coeffs = {"qext":0.0, "qsca":0.0, "qabs":0.0, "qb":0.0,
-                            "0.0":asy, "0.0":qratio, "ajv":(), "ayv ":()}
+                            "0.0":asy, "0.0":qratio}
         else:
+            par["ajv"] = ajv
+            par["ayv"] = ayv
             self._coeffs = MieCoeffs(par)
         self._props = None
         self._S12 = None
         self.size = par["x"] if par["y"]==None else par["y"]
+        self.ajv = ajv
+        self.ayv = ayv
 
     def prop(self, prop_name):
         if self._props is None:
@@ -106,7 +110,7 @@ class Mie(object):
             self.ayv = tuple(kwargs["ayv"])
 
     def _params_signature(self):
-        return (self.eps, self.mu, self.x, self.y, self.eps2, self.ajv, self.ayv)
+        return (self.eps, self.mu, self.x, self.y, self.eps2)
 
     def qext(self):
         """The extinction efficiency.
@@ -178,7 +182,7 @@ class Mie(object):
     def _get_scatt_prop(self, prop):
         sig = self._params_signature()
         if sig not in self._cache:
-            self._cache[sig] = MieScatterProps(sig)
+            self._cache[sig] = MieScatterProps(sig, self.ajv, self.ayv)
         return self._cache[sig].prop(prop)
 
     def _get_S12(self, u):
@@ -186,13 +190,13 @@ class Mie(object):
             raise ValueError("The cosine u must be between -1 and 1.")
         sig = self._params_signature()
         if sig not in self._cache:
-            self._cache[sig] = MieScatterProps(sig)
+            self._cache[sig] = MieScatterProps(sig, self.ajv, self.ayv)
         return self._cache[sig].S12(u)
 
     def _get_S12_pt(self, pin, tin):
         sig = self._params_signature()
         if sig not in self._cache:
-            self._cache[sig] = MieScatterProps(sig)
+            self._cache[sig] = MieScatterProps(sig, self.ajv, self.ayv)
         return self._cache[sig].S12_pt(pin, tin)
 
 
