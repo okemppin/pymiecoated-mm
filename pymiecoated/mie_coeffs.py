@@ -20,7 +20,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 from numpy import pi, arange, zeros, hstack, sqrt, sin, cos, array
+import numpy as np
 from scipy.special import jv, yv
+import numba
 
 
 class MieCoeffs(object):
@@ -74,7 +76,54 @@ def getjv(nu,x):
   return jv(nu,x)
 def getyv(nu,x):
   return yv(nu,x)
+
 # with numba speeding up s12 calculations, this is the main bottleneck for large particles
+@numba.jit(nopython=True)
+def single_mie_coeff_numba(eps,mu,x,ajv, ayv):
+    """Mie coefficients for the single-layered sphere.
+
+    Args:
+        eps: The complex relative permittivity.
+        mu: The complex relative permeability.
+        x: The size parameter.
+
+    Returns:
+        A tuple containing (an, bn, nmax) where an and bn are the Mie
+        coefficients and nmax is the maximum number of coefficients.
+    """
+    z = sqrt(eps*mu)*x
+    m = sqrt(eps/mu)
+
+
+    nmax = int(round(2+x+4*x**(1.0/3.0)))
+    nmax1 = nmax-1
+    nmx = int(round(max(nmax,abs(z))+16))
+    n = arange(nmax)
+    nu = n+1.5
+
+    sx = sqrt(0.5*pi*x)
+    px = sx*ajv # jv is a function of x only, since nmax is unique for each x
+    p1x = hstack((array([sin(x)]), px[:nmax1]))
+      
+    chx = -sx*ayv # jv is a function of x only, since nmax is unique for each x
+    ch1x = hstack((array([cos(x)]), chx[:nmax1]))
+    gsx = px-complex(0,1)*chx
+    gs1x = p1x-complex(0,1)*ch1x
+
+    dnx = zeros(nmx,dtype=np.complex128)
+    for j in range(nmx-1,0,-1):
+        r = (j+1.0)/z
+        dnx[j-1] = r - 1.0/(dnx[j]+r)
+    dn = dnx[:nmax]
+    n1 = n+1
+    da = dn/m + n1/x
+    db = dn*m + n1/x
+
+    an = (da*px-p1x)/(da*gsx-gs1x)
+    bn = (db*px-p1x)/(db*gsx-gs1x)
+
+    return (an, bn, nmax)
+
 def single_mie_coeff(eps,mu,x,ajv, ayv):
     """Mie coefficients for the single-layered sphere.
 
