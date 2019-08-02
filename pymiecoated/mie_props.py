@@ -70,9 +70,10 @@ def mie_props(coeffs,y):
 
 # issues with signature, so we just use automatic signature
 # we use homemade dot so we can call it from within numba-wrapped function
-@numba.jit(nopython=True)
+# fastmath improves runspeed by about 40%, which is quite meaningful (not sure about the accuracy though...)
+@numba.jit(nopython=True,fastmath=False)
 def numba_dot(a, b):
-  ret = 0 + 0j
+  ret = 0. + 0j
   for i in range(len(a)):
     ret += a[i] * b[i]
   return ret
@@ -102,6 +103,8 @@ def mie_S12_backend(nmax,an,bn,u):
 def mie_S12_backend_pt(nmax,an,bn,pin, tin):
     """The amplitude scattering matrix.
     """
+
+    # for very large particles this function consumes a lot of time. Possibly the summation is not very efficient?
 
 
     s1 = numba_dot(an,pin)+numba_dot(bn,tin)
@@ -184,8 +187,10 @@ def mie_ptnumba(u,nmax):
 
     p = mie_p(u, nmax)
     t = mie_t(u, nmax, p)
-    n = [float(i) for i in range(1, nmax+1)]
-    n2 = [(2 * ni + 1) / (ni * (ni + 1)) for ni in n]
+    #n = [float(i) for i in range(1, nmax+1)]
+    #n2 = [(2 * ni + 1) / (ni * (ni + 1)) for ni in n]
+
+    n2 = [float((2 * i + 1) / (i * (i + 1))) for i in range(1,nmax+1)]
     # faster to just store these n2-multiplied terms, since they only depend on nmax?
     # it is massively faster for size 0.01 ... 1000 range (this function is about 10x faster, total about 33%)
     for i in range(nmax):
