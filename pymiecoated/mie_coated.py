@@ -20,10 +20,143 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 from numpy import sqrt
-from .mie_coeffs import MieCoeffs
+import numpy as np
+import numba
+from scipy.special import jv, yv
+from .mie_coeffs import MieCoeffs, single_mie_coeff_numba
 from .mie_aux import Cache
-from .mie_props import mie_props, mie_S12, mie_S12_pt   
+from .mie_props import mie_props, mie_S12, mie_S12_pt, mie_ptnumba, mie_S12_backend_pt
 
+@numba.jit(nopython=True)
+def runS12Loop(nmax, an, bn, thisparr, thistarr, costarr):
+  ret = [(0.+0j, 0.+0j) for cost in costarr]
+  #ret = [None for cost in costarr]
+  for costi, cost in enumerate(costarr):
+    pin = thisparr[costi]
+    tin = thistarr[costi]
+    val = mie_S12_backend_pt(nmax,an,bn,pin, tin)
+    ret[costi] = val
+  return ret
+
+class MultipleMie(object):
+    def __init__(self, xArr, mrArr, miArr, costarr):
+      self.xArr = xArr
+      self.mrArr = mrArr
+      self.miArr = miArr
+      self.costarr = costarr
+      self.parr = {}
+      self.tarr = {}
+      self.jvdic = {}
+      self.yvdic = {}
+
+    def calculateS12(self, xx, eps, mu, jvarr, yvarr, costarr):
+      miean, miebn, nmax = single_mie_coeff_numba(eps,mu,xx,jvarr,yvarr)
+      thisparr = self.parr[nmax]
+      thistarr = self.tarr[nmax]
+      return runS12Loop(nmax, miean, miebn, thisparr, thistarr, costarr)
+    
+    def calculateS12SizeRange(self, mr, mi, costarr):
+      pass
+      eps = complex(mr, mi) ** 2
+      ret = [None for xxx in self.xArr]
+      for xxi, thisxx in enumerate(self.xArr):
+        if thisxx not in self.jvdic:
+          jvarr = ()
+          yvarr = ()
+        else:
+          jvarr = self.jvdic[thisxx] 
+          yvarr = self.yvdic[thisxx]
+        #ret[xxi] = testPyRawNumbaLoop(thisxx, eps, 1.0, parr, tarr, costarr, jvarr, yvarr)
+        ret[xxi] = self.calculateS12(thisxx, eps, 1.0, jvarr, yvarr, costarr)
+
+      return ret
+      
+    def calculateS12MrMi(self, costarr):
+      numiter = len(self.mrArr) * len(self.miArr)
+      numparallel = 1
+      if numparallel > 1:
+        mypool = multiprocessing.Pool(processes=numparallel)
+        results = [None for i in range(numiter)]
+
+      ret = [None for xxi in range(numiter)]
+      for xxi in range(numiter):
+        mr = self.mrArr[0]
+        mi = self.miArr[0]
+        if numparallel > 1:
+          this_result = mypool.apply_async(testPySizeRange, (xarr, mr, mi, parr, tarr, costarr, jvdic, yvdic, usenumba, useraw))
+          results[xxi] = this_result
+        else:
+          #ret[xxi] = testPySizeRange(xarr, mr, mi, parr, tarr, costarr, jvdic, yvdic, usenumba=usenumba, useraw=useraw)
+          ret[xxi] = self.calculateS12SizeRange(mr, mi, costarr)
+
+      if numparallel > 1:
+        for xxi, res in enumerate(results):
+          ret[xxi] = res.get()
+      return ret
+
+    def _getJVDic(self, xArr):
+      return self._getJVYVDic(xArr, "jv")
+    
+    def _getYVDic(self, xArr):
+      return self._getJVYVDic(xArr, "yv")
+    
+    def _getRJVDic(self, xArr):
+      return self._getJVYVDic(xArr, "rjv")
+    
+    def _getRYVDic(self, xArr, jvdic):
+      return self._getJVYVDic(xArr, "ryv", jvdic=jvdic)
+    
+    def _getJVYVDic(self, xArr, typ,jvdic=None):
+      ret = {} # dict more flexible than list/array
+      nmax = np.round(2+xArr+4*xArr**(1.0/3.0)).astype(int)
+      for xi, x in enumerate(xArr):
+        n = np.arange(nmax[xi])
+        nu = n+1.5
+        if typ == "jv":
+          valArr = jv(nu,x)
+        elif typ == "yv":
+          valArr = yv(nu,x)
+        elif typ == "rjv":
+          pass
+          #valArr = rjv(nu[-1],x)
+        elif typ == "ryv":
+          pass
+          #valArr = ryv(nu[-1],x,jvdic[x])
+    
+        ret[x] = valArr
+      return ret
+
+    def preCalculate(self):
+      self.preCalculateBessel()
+      self.preCalculatePT()
+
+    def preCalculateBessel(self): # function of size only
+      self.jvdic = self._getJVDic(self.xArr)
+      self.yvdic = self._getYVDic(self.xArr)
+      # experimental recurrent bessel
+      #jvdic = getRJVDic(xarr)
+      #yvdic = getRYVDic(xarr, jvdic)
+
+    def preCalculatePT(self): # function of size and the list of angles
+      """
+      Pre-calculate pi, tau arrays
+      """
+      prevnmax = None
+      for thisx in self.xArr:
+        thisnmax = int(round(2+thisx+4*thisx**(1.0/3.0)))
+        if thisnmax == prevnmax:
+          continue # this nmax already exists
+        prevnmax = thisnmax
+        if thisnmax not in self.parr:
+          self.parr[thisnmax] = [0. for i in self.costarr]
+          self.tarr[thisnmax] = [0. for i in self.costarr]
+          for costi, cost in enumerate(self.costarr): 
+            pin, tin = mie_ptnumba(cost, thisnmax)
+            self.parr[thisnmax][costi] = pin
+            self.tarr[thisnmax][costi] = tin
+          
+          self.parr[thisnmax] = np.array(self.parr[thisnmax])
+          self.tarr[thisnmax] = np.array(self.tarr[thisnmax])
 
 class MieScatterProps(object):
     """Stores the mie coefficients and the corresponding parameters.
