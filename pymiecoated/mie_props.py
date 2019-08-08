@@ -78,6 +78,27 @@ def numba_dot(a, b):
     ret += a[i] * b[i]
   return ret
 
+@numba.jit(nopython=True,fastmath=False)
+def numba_dot2(a, b, c, d):
+  ret = 0. + 0j
+  for i in range(len(a)):
+    ret += a[i] * b[i] + c[i] * d[i]
+  return ret
+
+# this is marginally faster than just doing the dots the honest way
+@numba.jit(nopython=True,fastmath=False)
+def numba_dot3(an,bn,pin,tin):
+  ret1 = 0. + 0j
+  ret2 = 0. + 0j
+  for i in range(len(an)):
+    an0 = an[i]
+    bn0 = bn[i]
+    pin0 = pin[i]
+    tin0 = tin[i]
+    ret1 += an0 * pin0 + bn0 * tin0
+    ret2 += an0 * tin0 + bn0 * pin0
+  return (ret1, ret2)
+
 def mie_S12(coeffs,u):
   #return mie_S12old(coeffs,u) # use this to fall back to non-numba version
   return mie_S12_backend(coeffs.nmax, coeffs.an, coeffs.bn, u)
@@ -95,9 +116,13 @@ def mie_S12_backend(nmax,an,bn,u):
     Do note that pin and tin do not depend on the refractive index, and thus
     can be shared between runs of different mr, mi
     """
-    pin = mie_p(u, nmax)
-    tin = mie_t(u, nmax, pin)
-    return mie_S12_backend_pt(nmax,an,bn,pin,tin)
+    p = mie_p(u, nmax)
+    t = mie_t(u, nmax, p)
+    n2 = [float(2 * i + 1) / (i * (i + 1)) for i in range(1,nmax+1)]
+    for i in range(nmax):
+      p[i] = p[i] * n2[i]
+      t[i] = t[i] * n2[i]
+    return mie_S12_backend_pt(nmax,an,bn,p,t)
 
 @numba.jit(nopython=True)
 def mie_S12_backend_pt(nmax,an,bn,pin, tin):
@@ -105,11 +130,18 @@ def mie_S12_backend_pt(nmax,an,bn,pin, tin):
     """
 
     # for very large particles this function consumes a lot of time. Possibly the summation is not very efficient?
+    """
+    this is called extremely many times in most large iterations (once for each angle) and thus
+    there is a lot of rationale in optimizing it as much as possible
+    """
 
-
+    # dot2 and dot3 are slightly faster than regular dot, about 5%
     s1 = numba_dot(an,pin)+numba_dot(bn,tin)
     s2 = numba_dot(an,tin)+numba_dot(bn,pin)
+    #s1 = numba_dot2(an,pin,bn,tin)
+    #s2 = numba_dot2(an,tin,bn,tin)
     return (s1, s2)
+    #return numba_dot3(an,bn,pin,tin)
 
 def mie_S12old(coeffs,u):
     """The amplitude scattering matrix.
@@ -190,7 +222,7 @@ def mie_ptnumba(u,nmax):
     #n = [float(i) for i in range(1, nmax+1)]
     #n2 = [(2 * ni + 1) / (ni * (ni + 1)) for ni in n]
 
-    n2 = [float((2 * i + 1) / (i * (i + 1))) for i in range(1,nmax+1)]
+    n2 = [float(2 * i + 1) / (i * (i + 1)) for i in range(1,nmax+1)]
     # faster to just store these n2-multiplied terms, since they only depend on nmax?
     # it is massively faster for size 0.01 ... 1000 range (this function is about 10x faster, total about 33%)
     for i in range(nmax):
