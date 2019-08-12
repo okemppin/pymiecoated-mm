@@ -23,48 +23,60 @@ from numpy import array, arange, dot, zeros, vstack, sqrt, sin, cos
 import numba
 import numpy as np
 
+@numba.jit(nopython=True)
+# This is still very slow and needs to be accelerated
+def mie_props_raw(coeffs_raw, y):
+  an, bn, nmax = coeffs_raw
+  """The scattering properties.
+  """
+  anp = an.real
+  anpp = an.imag
+  bnp = bn.real
+  bnpp = bn.imag
+
+  n1 = nmax-1
+  n = arange(1.,nmax+1.)
+  #n = [float(i) for i in range(1, nmax+1)]
+  cn = 2*n+1
+  c1n = n*(n+2)/(n+1)
+  c2n = cn/(n*(n+1))
+  y2 = y**2
+
+  dn = cn*(anp+bnp)
+  q = dn.sum()
+  qext = 2*q/y2
+
+  en = cn*(anp**2+anpp**2+bnp**2+bnpp**2)
+  q = en.sum()
+  qsca = 2*q/y2
+  qabs = qext-qsca
+
+  fn = (an-bn)*cn
+  gn=(-1)**n # this line takes third of the whole function exec time
+  q = (fn*gn).sum()
+  #qb = dot(q,np.conj(q)).real/y2
+  #qb1 = numba_dot(q,np.conj(q)).real/y2
+  #qb = qb1.real/y2
+  qb1 = q.real ** 2 + q.imag ** 2
+  qb = qb1.real/y2
+
+  g1 = zeros((4,nmax))
+  g1[:,:n1] = vstack((anp[1:nmax], anpp[1:nmax], bnp[1:nmax], bnpp[1:nmax]))
+
+  asy1 = c1n*(anp*g1[0,:]+anpp*g1[1,:]+bnp*g1[2,:]+bnpp*g1[3,:])
+  asy2 = c2n*(anp*bnp+anpp*bnpp)
+
+  asy = 4/y2*(asy1+asy2).sum()/qsca
+  qratio = qb/qsca
+
+ # return {"qext":qext, "qsca":qsca, "qabs":qabs, "qb":qb, "asy":asy, 
+ #     "qratio":qratio}
+  return (qext, qsca, qabs, qb, asy, qratio) 
 
 def mie_props(coeffs,y):
-    """The scattering properties.
-    """
-    anp = coeffs.an.real
-    anpp = coeffs.an.imag
-    bnp = coeffs.bn.real
-    bnpp = coeffs.bn.imag
-    nmax = coeffs.nmax
-
-    n1 = nmax-1
-    n = arange(1,nmax+1,dtype=float)
-    cn = 2*n+1
-    c1n = n*(n+2)/(n+1)
-    c2n = cn/(n*(n+1))
-    y2 = y**2
-
-    dn = cn*(anp+bnp)
-    q = dn.sum()
-    qext = 2*q/y2
-
-    en = cn*(anp**2+anpp**2+bnp**2+bnpp**2)
-    q = en.sum()
-    qsca = 2*q/y2
-    qabs = qext-qsca
-
-    fn = (coeffs.an-coeffs.bn)*cn
-    gn=(-1)**n # this line takes third of the whole function exec time
-    q = (fn*gn).sum()
-    qb = dot(q,q.conj()).real/y2
-
-    g1 = zeros((4,nmax),dtype=float)
-    g1[:,:n1] = vstack((anp[1:nmax], anpp[1:nmax], bnp[1:nmax], bnpp[1:nmax]))
-
-    asy1 = c1n*(anp*g1[0,:]+anpp*g1[1,:]+bnp*g1[2,:]+bnpp*g1[3,:])
-    asy2 = c2n*(anp*bnp+anpp*bnpp)
-
-    asy = 4/y2*(asy1+asy2).sum()/qsca
-    qratio = qb/qsca
-
-    return {"qext":qext, "qsca":qsca, "qabs":qabs, "qb":qb, "asy":asy, 
-        "qratio":qratio}
+  qext, qsca, qabs, qb, asy, qratio = mie_props_raw((coeffs.an, coeffs.bn, coeffs.nmax), y)
+  return {"qext":qext, "qsca":qsca, "qabs":qabs, "qb":qb, "asy":asy, 
+      "qratio":qratio}
 
 #@numba.jit("complex64(complex128[:], float64[:])", nopython=True)
 

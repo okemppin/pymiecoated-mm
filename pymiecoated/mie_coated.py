@@ -25,7 +25,7 @@ import numba
 from scipy.special import jv, yv
 from .mie_coeffs import MieCoeffs, single_mie_coeff_numba
 from .mie_aux import Cache
-from .mie_props import mie_props, mie_S12, mie_S12_pt, mie_ptnumba, mie_S12_backend_pt
+from .mie_props import mie_props, mie_props_raw, mie_S12, mie_S12_pt, mie_ptnumba, mie_S12_backend_pt
 
 @numba.jit(nopython=True)
 def runS12Loop(nmax, an, bn, thisparr, thistarr, costarr):
@@ -50,15 +50,23 @@ class MultipleMie(object):
       self.yvdic = {}
 
     def calculateS12(self, xx, eps, mu, jvarr, yvarr, costarr):
-      miean, miebn, nmax = single_mie_coeff_numba(eps,mu,xx,jvarr,yvarr)
+      params = single_mie_coeff_numba(eps,mu,xx,jvarr,yvarr)
+      return self.calculateS12WithParams(xx, jvarr, yvarr, costarr, params)
+
+    def calculateS12WithParams(self, xx, jvarr, yvarr, costarr, params):
+      miean, miebn, nmax = params
       thisparr = self.parr[nmax]
       thistarr = self.tarr[nmax]
       return runS12Loop(nmax, miean, miebn, thisparr, thistarr, costarr)
     
     def calculateS12SizeRange(self, mr, mi, costarr):
-      pass
       eps = complex(mr, mi) ** 2
-      ret = [None for xxx in self.xArr]
+      mu = 1.0
+      prokeys = ['qext', 'qsca', 'qabs', 'asy']
+      retkeys = ['s12'] + prokeys
+      ret = {}
+      for rk in retkeys:
+        ret[rk] = [None for xxx in self.xArr]
       for xxi, thisxx in enumerate(self.xArr):
         if thisxx not in self.jvdic:
           jvarr = ()
@@ -67,7 +75,16 @@ class MultipleMie(object):
           jvarr = self.jvdic[thisxx] 
           yvarr = self.yvdic[thisxx]
         #ret[xxi] = testPyRawNumbaLoop(thisxx, eps, 1.0, parr, tarr, costarr, jvarr, yvarr)
-        ret[xxi] = self.calculateS12(thisxx, eps, 1.0, jvarr, yvarr, costarr)
+        coeffs = single_mie_coeff_numba(eps,mu,thisxx,jvarr,yvarr)
+        ret['s12'][xxi] = self.calculateS12WithParams(thisxx, jvarr, yvarr, costarr, coeffs)
+        # TODO need to get mie_props
+        #params = mie_props(coeffs,y)
+        props = mie_props_raw(coeffs,thisxx)
+        qext, qsca, qabs, qb, asy, qratio = props
+        props = {"qext":qext, "qsca":qsca, "qabs":qabs, "qb":qb, "asy":asy, "qratio":qratio}
+
+        for prokey in prokeys:
+          ret[prokey][xxi] = props[prokey]
 
       return ret
       
@@ -80,6 +97,7 @@ class MultipleMie(object):
 
       ret = [None for xxi in range(numiter)]
       for xxi in range(numiter):
+        print "WARNING! WRONG MR, MI VALUES USED!!!"
         mr = self.mrArr[0]
         mi = self.miArr[0]
         if numparallel > 1:

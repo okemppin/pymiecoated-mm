@@ -31,7 +31,6 @@ class MieCoeffs(object):
     def __init__(self, par):
         (self.an, self.bn, self.nmax) = mie_coeffs(par)
 
-
 def mie_coeffs(params):
     """Input validation and function selection for the Mie coefficients.
     """
