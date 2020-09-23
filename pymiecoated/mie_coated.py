@@ -62,7 +62,7 @@ class MultipleMie(object):
     def calculateS12SizeRange(self, mr, mi, costarr):
       eps = complex(mr, mi) ** 2
       mu = 1.0
-      prokeys = ['qext', 'qsca', 'qabs', 'asy']
+      prokeys = ['qext', 'qsca', 'qabs', 'asy', 'qb', 'qratio']
       retkeys = ['s12'] + prokeys
       ret = {}
       for rk in retkeys:
@@ -97,7 +97,7 @@ class MultipleMie(object):
 
       ret = [None for xxi in range(numiter)]
       for xxi in range(numiter):
-        print "WARNING! WRONG MR, MI VALUES USED!!!"
+        #print "WARNING! WRONG MR, MI VALUES USED!!!"
         mr = self.mrArr[0]
         mi = self.miArr[0]
         if numparallel > 1:

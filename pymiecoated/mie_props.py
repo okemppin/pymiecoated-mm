@@ -22,6 +22,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 from numpy import array, arange, dot, zeros, vstack, sqrt, sin, cos
 import numba
 import numpy as np
+import time
 
 @numba.jit(nopython=True)
 # This is still very slow and needs to be accelerated
