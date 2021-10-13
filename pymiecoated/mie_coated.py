@@ -39,8 +39,9 @@ def runS12Loop(nmax, an, bn, thisparr, thistarr, costarr):
   return ret
 
 class MultipleMie(object):
-    def __init__(self, xArr, mrArr, miArr, costarr):
+    def __init__(self, xArr, yArr, mrArr, miArr, costarr):
       self.xArr = xArr
+      self.yArr = yArr
       self.mrArr = mrArr
       self.miArr = miArr
       self.costarr = costarr
@@ -75,7 +76,11 @@ class MultipleMie(object):
           jvarr = self.jvdic[thisxx] 
           yvarr = self.yvdic[thisxx]
         #ret[xxi] = testPyRawNumbaLoop(thisxx, eps, 1.0, parr, tarr, costarr, jvarr, yvarr)
-        coeffs = single_mie_coeff_numba(eps,mu,thisxx,jvarr,yvarr)
+        if self.yArr == None: # single-layer sphere
+          coeffs = single_mie_coeff_numba(eps,mu,thisxx,jvarr,yvarr)
+        else:
+          # not optimized
+          coeffs = coated_mie_coeff_numba(eps,mu,thisxx,self.yArr[xxi])
         ret['s12'][xxi] = self.calculateS12WithParams(thisxx, jvarr, yvarr, costarr, coeffs)
         # TODO need to get mie_props
         #params = mie_props(coeffs,y)
