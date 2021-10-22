@@ -31,7 +31,6 @@ from .mie_props import mie_props, mie_props_raw, mie_S12, mie_S12_pt, mie_ptnumb
 @numba.jit(nopython=True)
 def runS12Loop(nmax, an, bn, thisparr, thistarr, costarr):
   ret = [(0.+0j, 0.+0j) for cost in costarr]
-  #ret = [None for cost in costarr]
   for costi, cost in enumerate(costarr):
     pin = thisparr[costi]
     tin = thistarr[costi]
@@ -76,15 +75,12 @@ class MultipleMie(object):
         else:
           jvarr = self.jvdic[thisxx] 
           yvarr = self.yvdic[thisxx]
-        #ret[xxi] = testPyRawNumbaLoop(thisxx, eps, 1.0, parr, tarr, costarr, jvarr, yvarr)
         if self.yArr == None: # single-layer sphere
           coeffs = single_mie_coeff_numba(eps,mu,thisxx,jvarr,yvarr)
         else:
-          # not optimized
+          # TODO not optimized
           coeffs = coated_mie_coeff_numba(eps,mu,thisxx,self.yArr[xxi])
         ret['s12'][xxi] = self.calculateS12WithParams(thisxx, jvarr, yvarr, costarr, coeffs)
-        # TODO need to get mie_props
-        #params = mie_props(coeffs,y)
         props = mie_props_raw(coeffs,thisxx)
         qext, qsca, qabs, qb, asy, qratio = props
         props = {"qext":qext, "qsca":qsca, "qabs":qabs, "qb":qb, "asy":asy, "qratio":qratio}
@@ -103,14 +99,12 @@ class MultipleMie(object):
 
       ret = [None for xxi in range(numiter)]
       for xxi in range(numiter):
-        #print "WARNING! WRONG MR, MI VALUES USED!!!"
         mr = self.mrArr[0]
         mi = self.miArr[0]
         if numparallel > 1:
           this_result = mypool.apply_async(testPySizeRange, (xarr, mr, mi, parr, tarr, costarr, jvdic, yvdic, usenumba, useraw))
           results[xxi] = this_result
         else:
-          #ret[xxi] = testPySizeRange(xarr, mr, mi, parr, tarr, costarr, jvdic, yvdic, usenumba=usenumba, useraw=useraw)
           ret[xxi] = self.calculateS12SizeRange(mr, mi, costarr)
 
       if numparallel > 1:
@@ -141,7 +135,7 @@ class MultipleMie(object):
         elif typ == "yv":
           valArr = yv(nu,x)
         elif typ == "rjv":
-          pass
+          pass # this mode is not working properly?
           #valArr = rjv(nu[-1],x)
         elif typ == "ryv":
           pass
@@ -157,7 +151,7 @@ class MultipleMie(object):
     def preCalculateBessel(self): # function of size only
       self.jvdic = self._getJVDic(self.xArr)
       self.yvdic = self._getYVDic(self.xArr)
-      # experimental recurrent bessel
+      # experimental recurrent bessel, accuracy issues
       #jvdic = getRJVDic(xarr)
       #yvdic = getRYVDic(xarr, jvdic)
 

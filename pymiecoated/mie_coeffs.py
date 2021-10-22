@@ -96,8 +96,6 @@ def single_mie_coeff_numba(eps,mu,x,ajv, ayv):
     z = sqrt(eps*mu)*x
     m = sqrt(eps/mu)
 
-    #beg = time.time()
-
     nmax = int(round(2+x+4*x**(1.0/3.0)))
     nmax1 = nmax-1
     nmx = int(round(max(nmax,abs(z))+16))
@@ -109,16 +107,12 @@ def single_mie_coeff_numba(eps,mu,x,ajv, ayv):
     p1x = hstack((array([sin(x)]), px[:nmax1]))
     # also do note that so far p1x doesn't use z or m in any way, and could be pre-computed
     
-    #time1 = time.time()-beg;beg=time.time()
-      
     chx = -sx*ayv # jv is a function of x only, since nmax is unique for each x
     ch1x = hstack((array([cos(x)]), chx[:nmax1]))
     gsx = px-complex(0,1)*chx
     gs1x = p1x-complex(0,1)*ch1x
     # similarly, nothing up to gs1x needs to know the refractive index
     # however, as far as I can read, most of this stuff is scalar, though sx*ajv and sx*ayv are vector multiplications
-
-    #time2 = time.time()-beg;beg=time.time()
 
     # dnx,dn etc use m information
     dnx = zeros(nmx,dtype=np.complex128)
@@ -130,17 +124,8 @@ def single_mie_coeff_numba(eps,mu,x,ajv, ayv):
     da = dn/m + n1/x
     db = dn*m + n1/x
 
-    #time3 = time.time()-beg;beg=time.time()
-
     an = (da*px-p1x)/(da*gsx-gs1x)
     bn = (db*px-p1x)/(db*gsx-gs1x)
-
-    #time4 = time.time()-beg;beg=time.time()
-    #print(time1)
-    #print(time2)
-    #print(time3)
-    #print(time4)
-    #sys.exit()
 
     return (an, bn, nmax)
 
@@ -168,12 +153,10 @@ def single_mie_coeff(eps,mu,x,ajv, ayv):
 
     sx = sqrt(0.5*pi*x)
     # jv/yv consume the most time here (and thus the whole program) for large values of x
-    #px = sx*getjv(nu,x)
     if len(ajv) == 0:
       ajv = getjv(nu,x)
     px = sx*ajv # jv is a function of x only, since nmax is unique for each x
     p1x = hstack((sin(x), px[:nmax1]))
-    #chx = -sx*getyv(nu,x)
     if len(ayv) == 0:
       ayv = getyv(nu,x)
       
