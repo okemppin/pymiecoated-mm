@@ -29,9 +29,9 @@ from .mie_aux import Cache
 from .mie_props import mie_props, mie_props_raw, mie_S12, mie_S12_pt, mie_ptnumba, mie_S12_backend_pt
 
 @numba.jit(nopython=True)
-def runS12Loop(nmax, an, bn, thisparr, thistarr, costarr):
-  ret = [(0.+0j, 0.+0j) for cost in costarr]
-  for costi, cost in enumerate(costarr):
+def runS12Loop(nmax, an, bn, thisparr, thistarr):
+  ret = [(0.+0j, 0.+0j) for cost in self.costarr]
+  for costi, cost in enumerate(self.costarr):
     pin = thisparr[costi]
     tin = thistarr[costi]
     val = mie_S12_backend_pt(nmax,an,bn,pin, tin)
@@ -42,25 +42,23 @@ class MultipleMie(object):
     def __init__(self, xArr, yArr, mrArr, miArr, costarr):
       self.xArr = xArr
       self.yArr = yArr
-      self.mrArr = mrArr
-      self.miArr = miArr
       self.costarr = costarr
       self.parr = {}
       self.tarr = {}
       self.jvdic = {}
       self.yvdic = {}
 
-    def calculateS12(self, xx, eps, mu, jvarr, yvarr, costarr):
+    def calculateS12(self, xx, eps, mu, jvarr, yvarr):
       params = single_mie_coeff_numba(eps,mu,xx,jvarr,yvarr)
-      return self.calculateS12WithParams(xx, jvarr, yvarr, costarr, params)
+      return self.calculateS12WithParams(xx, jvarr, yvarr, params)
 
-    def calculateS12WithParams(self, xx, jvarr, yvarr, costarr, params):
+    def calculateS12WithParams(self, xx, jvarr, yvarr, params):
       miean, miebn, nmax = params
       thisparr = self.parr[nmax]
       thistarr = self.tarr[nmax]
-      return runS12Loop(nmax, miean, miebn, thisparr, thistarr, costarr)
+      return runS12Loop(nmax, miean, miebn, thisparr, thistarr)
     
-    def calculateS12SizeRange(self, mr, mi, costarr):
+    def calculateS12SizeRange(self, mr, mi):
       eps = complex(mr, mi) ** 2
       mu = 1.0
       prokeys = ['qext', 'qsca', 'qabs', 'asy', 'qb', 'qratio']
@@ -80,7 +78,7 @@ class MultipleMie(object):
         else:
           # TODO not optimized
           coeffs = coated_mie_coeff_numba(eps,mu,thisxx,self.yArr[xxi])
-        ret['s12'][xxi] = self.calculateS12WithParams(thisxx, jvarr, yvarr, costarr, coeffs)
+        ret['s12'][xxi] = self.calculateS12WithParams(thisxx, jvarr, yvarr, coeffs)
         props = mie_props_raw(coeffs,thisxx)
         qext, qsca, qabs, qb, asy, qratio = props
         props = {"qext":qext, "qsca":qsca, "qabs":qabs, "qb":qb, "asy":asy, "qratio":qratio}
@@ -90,7 +88,11 @@ class MultipleMie(object):
 
       return ret
       
-    def calculateS12MrMi(self, costarr):
+    def calculateS12MrMi(self):
+      """
+      Not in use currently
+      """
+      sys.exit("calculateS12MrMi not currently functional and needs to be refactored")
       numiter = len(self.mrArr) * len(self.miArr)
       numparallel = 1
       if numparallel > 1:
@@ -102,10 +104,10 @@ class MultipleMie(object):
         mr = self.mrArr[0]
         mi = self.miArr[0]
         if numparallel > 1:
-          this_result = mypool.apply_async(testPySizeRange, (xarr, mr, mi, parr, tarr, costarr, jvdic, yvdic, usenumba, useraw))
+          this_result = mypool.apply_async(testPySizeRange, (xarr, mr, mi, parr, tarr, self.costarr, jvdic, yvdic, usenumba, useraw))
           results[xxi] = this_result
         else:
-          ret[xxi] = self.calculateS12SizeRange(mr, mi, costarr)
+          ret[xxi] = self.calculateS12SizeRange(mr, mi)
 
       if numparallel > 1:
         for xxi, res in enumerate(results):
@@ -135,7 +137,7 @@ class MultipleMie(object):
         elif typ == "yv":
           valArr = yv(nu,x)
         elif typ == "rjv":
-          pass # this mode is not working properly?
+          pass # this mode is not working properly
           #valArr = rjv(nu[-1],x)
         elif typ == "ryv":
           pass
