@@ -29,9 +29,9 @@ from .mie_aux import Cache
 from .mie_props import mie_props, mie_props_raw, mie_S12, mie_S12_pt, mie_ptnumba, mie_S12_backend_pt
 
 @numba.jit(nopython=True)
-def runS12Loop(nmax, an, bn, thisparr, thistarr):
-  ret = [(0.+0j, 0.+0j) for cost in self.costarr]
-  for costi, cost in enumerate(self.costarr):
+def runS12Loop(nmax, an, bn, thisparr, thistarr, costarr):
+  ret = [(0.+0j, 0.+0j) for cost in costarr]
+  for costi, cost in enumerate(costarr):
     pin = thisparr[costi]
     tin = thistarr[costi]
     val = mie_S12_backend_pt(nmax,an,bn,pin, tin)
@@ -56,7 +56,7 @@ class MultipleMie(object):
       miean, miebn, nmax = params
       thisparr = self.parr[nmax]
       thistarr = self.tarr[nmax]
-      return runS12Loop(nmax, miean, miebn, thisparr, thistarr)
+      return runS12Loop(nmax, miean, miebn, thisparr, thistarr, self.costarr)
     
     def calculateS12SizeRange(self, mr, mi):
       eps = complex(mr, mi) ** 2
