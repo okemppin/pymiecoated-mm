@@ -1,6 +1,6 @@
 """
 Copyright (C) 2012-2013 Jussi Leinonen
-Copyright (C) 2019-2021 Osku Kemppinen
+Copyright (C) 2019-2022 Osku Kemppinen
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -39,7 +39,7 @@ def runS12Loop(nmax, an, bn, thisparr, thistarr):
   return ret
 
 class MultipleMie(object):
-    def __init__(self, xArr, yArr, mrArr, miArr, costarr):
+    def __init__(self, xArr, yArr, costarr):
       self.xArr = xArr
       self.yArr = yArr
       self.costarr = costarr
